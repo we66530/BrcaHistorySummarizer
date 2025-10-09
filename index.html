@@ -8,7 +8,7 @@
     body { font-family: sans-serif; margin: 2rem; background: #f7f7fb; color: #111; }
     textarea { width: 100%; height: 200px; margin-top: 10px; padding: 10px; border-radius: 8px; }
     button { margin-top: 10px; padding: 10px 20px; border: none; border-radius: 6px; background: #111827; color: white; cursor: pointer; }
-    input { padding: 8px; border-radius: 6px; border: 1px solid #ddd; width: 100%; margin-top: 5px; }
+    input, select { padding: 8px; border-radius: 6px; border: 1px solid #ddd; width: 100%; margin-top: 5px; }
     #output { margin-top: 20px; padding: 15px; border-radius: 8px; background: #fff; white-space: pre-wrap; }
   </style>
 </head>
@@ -22,11 +22,30 @@
   <label><strong>Gemini API Key:</strong></label>
   <input type="password" id="apiKey" placeholder="Enter your Gemini API key" />
 
+  <br /><br />
+  <label><strong>Select model:</strong></label>
+  <select id="modelSelect">
+    <option value="models/gemini-2.5-flash">gemini-2.5-flash</option>
+    <option value="models/gemini-2.5-pro">gemini-2.5-pro</option>
+    <option value="models/gemini-2.0-flash">gemini-2.0-flash</option>
+    <option value="models/gemini-2.0-flash-001">gemini-2.0-flash-001</option>
+    <option value="models/gemini-2.0-flash-lite">gemini-2.0-flash-lite</option>
+    <option value="models/gemini-2.0-flash-lite-001">gemini-2.0-flash-lite-001</option>
+    <option value="models/gemini-2.5-flash-lite">gemini-2.5-flash-lite</option>
+  </select>
+
   <button id="summarizeBtn">Summarize</button>
 
   <div id="output"></div>
 
   <script>
+    const NCCN_PREFIX = `Using the following patient’s diagnosis and treatment history, can you use the NCCN guideline I gave you to answer:
+1. What is the next step treatment plan for the patient? (Medication, Surgery, Imaging Examination, Genetic examination …) (and tell me at which specific page number you found it)
+2. Does the patient’s previous Treatment course follow the NCCN guideline?
+3. If you can ask a question, what would you want to ask about the patient’s history related NCCN guideline content?
+
+`;
+
     const promptPrefix = `Can you summarize the following patient history in the following form? 
 (Make sure the diagnosis-related history follows chronological order.) 
 # (diagnosis 1) Right/Left breast {invasive carcinoma of no special type}, grade {3}, ER (-/+, ?%), PR(-/+, ?%), HER2: (-/+, score ?), XXX type, T?N?M?, Stage ??? (first diagnosed on XXXX/XX/XX) 
@@ -41,12 +60,17 @@ Also, if dose data like “80 mg/m²” is present in the data, just omit it in 
 
 ---\n\n`;
 
-    // Use one of the valid models
-    const model = "models/gemini-2.5-flash";
+    function extractAge(text) {
+      // Look for "73", "73 y/o", or pattern "(\d+)\s*(y/o|years?)"
+      const match = text.match(/(\d{2})\s*(y\/o|years? old)?/i);
+      if (match) return match[1] + " y/o";
+      return "";
+    }
 
     document.getElementById("summarizeBtn").addEventListener("click", async () => {
       const apiKey = document.getElementById("apiKey").value.trim();
       const inputText = document.getElementById("inputText").value.trim();
+      const model = document.getElementById("modelSelect").value;
       const outputDiv = document.getElementById("output");
 
       if (!apiKey) {
@@ -59,6 +83,7 @@ Also, if dose data like “80 mg/m²” is present in the data, just omit it in 
       }
 
       outputDiv.textContent = "Summarizing... please wait.";
+      const ageStr = extractAge(inputText);
 
       try {
         const response = await fetch(
@@ -75,7 +100,8 @@ Also, if dose data like “80 mg/m²” is present in the data, just omit it in 
         const data = await response.json();
 
         if (data.candidates && data.candidates.length > 0) {
-          outputDiv.textContent = data.candidates[0].content.parts[0].text;
+          const summary = data.candidates[0].content.parts[0].text;
+          outputDiv.textContent = NCCN_PREFIX + (ageStr ? ageStr + "\n" : "") + summary;
         } else {
           outputDiv.textContent = "No summary returned. Full response:\n" + JSON.stringify(data, null, 2);
         }
